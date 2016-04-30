@@ -1,0 +1,44 @@
+#!/usr/bin/make -f
+
+PYTHONS:=$(shell pyversions -vr)
+PYTHON3S:=$(shell py3versions -vr)
+
+UPSTREAM_GIT = git://github.com/stefankoegl/python-json-pointer.git
+
+include /usr/share/openstack-pkg-tools/pkgos.make
+
+%:
+	dh $@ --buildsystem=python_distutils --with python2,python3,sphinxdoc
+
+ifeq (,$(findstring nocheck, $(DEB_BUILD_OPTIONS)))
+override_dh_auto_test:
+	set -e ; for pyvers in $(PYTHONS) $(PYTHON3S); do \
+		python$$pyvers ./tests.py ; \
+	done
+endif
+
+override_dh_auto_install:
+	set -e ; for pyvers in $(PYTHONS); do \
+		python$$pyvers setup.py install --install-layout=deb \
+			--root $(CURDIR)/debian/python-json-pointer; \
+	done
+	set -e ; for pyvers in $(PYTHON3S); do \
+		python$$pyvers setup.py install --install-layout=deb \
+			--root $(CURDIR)/debian/python3-json-pointer; \
+	done
+	mv $(CURDIR)/debian/python-json-pointer/usr/bin/jsonpointer $(CURDIR)/debian/python-json-pointer/usr/bin/python2-jsonpointer
+	mv $(CURDIR)/debian/python3-json-pointer/usr/bin/jsonpointer $(CURDIR)/debian/python3-json-pointer/usr/bin/python3-jsonpointer
+	rm -rf $(CURDIR)/debian/python*-json-pointer/usr/lib/python*/dist-packages/*.pth
+
+override_dh_python3:
+	dh_python3 --shebang=/usr/bin/python3
+
+override_dh_auto_clean:
+	dh_auto_clean
+	rm -rf build .egg-info
+
+ifeq (,$(findstring nodocs, $(DEB_BUILD_OPTIONS)))
+override_dh_sphinxdoc:
+	sphinx-build -b html doc $(CURDIR)/debian/python-json-pointer-doc/usr/share/doc/python-json-pointer-doc/html
+	dh_sphinxdoc -O--buildsystem=python_distutils
+endif
